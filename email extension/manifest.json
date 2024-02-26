@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Mail Extension",
+  "version": "1.0",
+  "description": "Provides links to Gmail and ProtonMail accounts.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "email-icon.png"
+    }
+  },
+  "host_permissions": [
+    "https://mail.google.com/",
+    "https://mail.protonmail.com/"
+  ],
+  "icons": {
+    "128": "email-icon.png"
+  }
+}

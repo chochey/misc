@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mail Extension</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #f4f4f4;
+        margin: 2px;
+        padding: 2px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      a {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 15px 5px;
+        padding: 20px;
+        font-size: 18px;
+        border: none;
+        border-radius: 8px;
+        text-align: center;
+        text-decoration: underline;
+        color: rgb(0, 0, 0);
+        font-weight: 900;
+        height: 100px;
+        width: 200px;
+        transition: transform 0.3s ease; /* Smooth transition */
+      }
+
+      a:hover {
+        transform: scale(1.05); /* Slightly scale up when hovered */
+      }
+
+      .gmail::before,
+      .protonmail::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: -1;
+        border-radius: 8px;
+      }
+
+      .gmail::before {
+        background-image: url("Gmail-Logo.png");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 0.9;
+      }
+
+      .protonmail::before {
+        background-image: url("protonmail.jpg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="https://mail.google.com/mail/u/0/" target="_blank" class="gmail">
+      <h1>chochey</h1>
+    </a>
+    <a href="https://mail.google.com/mail/u/1/" target="_blank" class="gmail">
+      <h1>nshosey</h1>
+    </a>
+    <a
+      href="https://mail.protonmail.com/u/0/"
+      target="_blank"
+      class="protonmail"
+    >
+    </a>
+  </body>
+</html>
