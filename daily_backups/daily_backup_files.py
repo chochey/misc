@@ -40,6 +40,8 @@ backup_files = [
     r"C:\Users\Blue\Desktop\Misc",
     r"C:\Users\Blue\Desktop\UIA.Resume",
     r"C:\Users\Blue\Desktop\Repos",
+    r"C:\Users\Blue\Desktop\Servers",
+    r"C:\Users\Blue\Desktop\DnD_Books",
 ]
 
 # Backup directory
