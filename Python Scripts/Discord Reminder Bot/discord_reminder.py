@@ -46,6 +46,7 @@ REMINDERS = [
 
     # ========== SATURDAY REMINDERS (day 5) ==========
     # [5, 14, 0, f"🛒 **REMINDER**: {myid} Grocery shopping reminder."],
+      [5, 23, 59, f"**REMINDER**: {myid} Dominos email analysis."],
 
     # ========== SUNDAY REMINDERS (day 6) ==========
     # [6, 18, 0, f"🔮 **REMINDER**: {myid} Prepare for the upcoming week."],
