@@ -136,3 +136,41 @@ The script includes examples for each day of the week. Uncomment or modify them 
 - Friday: Weekly metrics reminder at 9:30 AM
 - Saturday: Weekend tasks reminder at 10:00 AM
 - Sunday: Timesheet submission reminder at 3:00 PM
+
+-----------------------------------------------------------------------
+
+Core Commands
+!addreminder <day> <time> <message>
+
+Adds a new reminder
+Examples:
+!addreminder monday 3pm Team meeting
+!addreminder today now Urgent reminder
+!addreminder tomorrow 9:30am Morning check-in
+
+!listreminders
+Shows all your current reminders with their ID numbers
+
+!removereminder <id>
+Removes a reminder using its ID number (get ID from !listreminders)
+Example: !removereminder 0
+
+!help_reminders
+Shows a help message with command examples
+
+Supported Day Formats
+
+Full day names: monday, tuesday, wednesday, etc.
+Short names: mon, tue, wed, etc.
+Very short: m, t, w, etc.
+Numbers: 0 (Monday) through 6 (Sunday)
+Special: today, tomorrow
+
+Supported Time Formats
+
+24-hour format: 14:30, 9:00
+12-hour with AM/PM: 2:30pm, 9:00am
+Just the hour: 3pm, 10am
+Special value: now (uses current time)
+
+All reminders will automatically include your user ID in the format: **REMINDER**: @chochey Your message
