@@ -1,0 +1,2 @@
+requests>=2.28.0
+parse-torrent-title>=2.8.0

@@ -1,0 +1,67 @@
+Media Renamer - Usage Commands
+===============================
+
+Automatically renames and organizes movies and TV shows from downloads.
+
+SETUP (one-time):
+-----------------
+cd ~/Desktop/Repos/Media-Organizer
+pip3 install --break-system-packages -r requirements.txt
+
+
+RUN ONCE (process new downloads):
+---------------------------------
+python3 movie_renamer.py
+
+
+DRY RUN (preview without moving):
+---------------------------------
+python3 movie_renamer.py --dry-run
+
+
+RUN IN WATCH MODE (auto every 30 seconds):
+------------------------------------------
+python3 movie_renamer.py --watch
+
+
+RENAME EXISTING MOVIE LIBRARY:
+------------------------------
+# Preview what would be renamed:
+python3 movie_renamer.py --library --dry-run
+
+# Actually rename:
+python3 movie_renamer.py --library
+
+
+RENAME EXISTING TV LIBRARY:
+---------------------------
+# Preview what would be renamed:
+python3 movie_renamer.py --library-tv --dry-run
+
+# Actually rename:
+python3 movie_renamer.py --library-tv
+
+
+STOP WATCH MODE:
+----------------
+Press Ctrl+C
+
+
+HOW IT WORKS:
+-------------
+Movies:   /media/blue/ST6000NM 0115-1YZ110 USB Device/Share -> /media/blue/OOS6000G USB Device/Movies/Title (Year)/Title (Year).ext
+TV Shows: /media/blue/ST6000NM 0115-1YZ110 USB Device/Share -> /media/blue/OOS6000G USB Device/TV/Show Name (Year)/Season XX/Show Name - S01E01 - Episode.ext
+
+Auto-detection:
+- If filename has S01E01, SxxExx, season/episode info -> TV show
+- Otherwise -> Movie
+
+
+CONFIGURATION:
+--------------
+Edit config.py to change:
+- SOURCE_DIR: Where downloads come from
+- MOVIE_DEST_DIR: Where movies go
+- TV_DEST_DIR: Where TV shows go
+- INCOMPLETE_DIR: Where incomplete downloads are
+- POLL_INTERVAL: How often to scan in watch mode (default: 30 seconds)
