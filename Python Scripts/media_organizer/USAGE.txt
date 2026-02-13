@@ -57,11 +57,24 @@ Auto-detection:
 - Otherwise -> Movie
 
 
+MULTI-DRIVE SUPPORT:
+--------------------
+If a TV show or movie already exists on another drive, new episodes/seasons
+will automatically be placed on that same drive. If no existing folder is
+found, files go to the primary drive (MOVIE_DEST_DIR / TV_DEST_DIR).
+
+To add a new drive, edit config.py and add the path to MOVIE_DEST_DIRS
+and/or TV_DEST_DIRS lists. Library rename mode (--library, --library-tv)
+scans all drives automatically.
+
+
 CONFIGURATION:
 --------------
 Edit config.py to change:
 - SOURCE_DIR: Where downloads come from
-- MOVIE_DEST_DIR: Where movies go
-- TV_DEST_DIR: Where TV shows go
+- MOVIE_DEST_DIR: Primary movie destination (default for new content)
+- TV_DEST_DIR: Primary TV destination (default for new content)
+- MOVIE_DEST_DIRS: All movie drives to search (list)
+- TV_DEST_DIRS: All TV drives to search (list)
 - INCOMPLETE_DIR: Where incomplete downloads are
 - POLL_INTERVAL: How often to scan in watch mode (default: 30 seconds)

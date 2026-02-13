@@ -53,6 +53,40 @@ def _check_omdb_rate_limit(response: requests.Response) -> None:
         _omdb_consecutive_401s = 0
 
 
+def find_existing_movie_drive(movie_folder_name: str) -> Path | None:
+    """Check all movie drives for an existing folder with this name."""
+    for drive_dir in config.MOVIE_DEST_DIRS:
+        candidate = Path(drive_dir) / movie_folder_name
+        if candidate.exists():
+            return Path(drive_dir)
+    return None
+
+
+def find_existing_show_drive(series_folder_name: str) -> Path | None:
+    """Check all TV drives for an existing folder with this name."""
+    for drive_dir in config.TV_DEST_DIRS:
+        candidate = Path(drive_dir) / series_folder_name
+        if candidate.exists():
+            return Path(drive_dir)
+    return None
+
+
+def get_movie_dest(movie_folder_name: str) -> Path:
+    """Get the destination drive for a movie, preferring drives that already have it."""
+    existing = find_existing_movie_drive(movie_folder_name)
+    if existing:
+        return existing
+    return Path(config.MOVIE_DEST_DIR)
+
+
+def get_tv_dest(series_folder_name: str) -> Path:
+    """Get the destination drive for a TV show, preferring drives that already have it."""
+    existing = find_existing_show_drive(series_folder_name)
+    if existing:
+        return existing
+    return Path(config.TV_DEST_DIR)
+
+
 def parse_filename(filename: str) -> tuple[str | None, str | None]:
     """Extract title and year from a filename using PTN."""
     parsed = parse(filename)
@@ -563,8 +597,9 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
 
     # Create folder structure: Show Name (Year)/Season XX/
     series_folder_name = f"{re.sub(r'[<>:\"/\\|?*]', '', series_title)} ({series_year})"
+    tv_base = get_tv_dest(series_folder_name)
     season_folder_name = f"Season {season:02d}"
-    dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / season_folder_name
+    dest_folder = tv_base / series_folder_name / season_folder_name
 
     if dry_run:
         if show["type"] == "loose":
@@ -591,7 +626,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
 
                 # Build per-file destination folder based on file's season
                 file_season_folder = f"Season {file_season:02d}"
-                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
+                file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
                 file_ep_title = file_tv_info.get("episode_title") or episode_title
@@ -623,7 +658,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                     file_episode = file_episode[0]
 
                 file_season_folder = f"Season {file_season:02d}"
-                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
+                file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 dest_name = create_tv_filename(
                     series_title, file_season, file_episode, None, suffix, lang_suffix
@@ -671,7 +706,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
 
                 # Build per-file destination folder based on file's season
                 file_season_folder = f"Season {file_season:02d}"
-                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
+                file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
                 file_ep_title = file_tv_info.get("episode_title") or episode_title
@@ -708,7 +743,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                     file_episode = file_episode[0]
 
                 file_season_folder = f"Season {file_season:02d}"
-                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
+                file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 dest_name = create_tv_filename(
                     series_title, file_season, file_episode, None, suffix, lang_suffix
@@ -830,7 +865,8 @@ def move_movie(movie: dict, omdb_info: dict, dry_run: bool = False) -> bool:
     title = omdb_info["title"]
     year = omdb_info["year"]
     dest_folder_name = create_clean_filename(title, year, "")
-    dest_folder = Path(config.MOVIE_DEST_DIR) / dest_folder_name
+    movie_base = get_movie_dest(dest_folder_name)
+    dest_folder = movie_base / dest_folder_name
 
     if dest_folder.exists():
         log.info(f"SKIP: Destination already exists: {dest_folder}")
@@ -1056,14 +1092,22 @@ def rename_files_in_folder(folder: Path, title: str, year: str, dry_run: bool = 
 
 def process_library(dry_run: bool = False) -> tuple[int, int, int]:
     """Process existing library to rename improperly named folders and files."""
-    library = Path(config.MOVIE_DEST_DIR)
-    if not library.exists():
-        log.error(f"Library directory does not exist: {library}")
-        return 0, 0, 0
-
-    log.info(f"Scanning library: {library}")
     if dry_run:
         log.info("=== DRY RUN MODE - No files will be renamed ===")
+
+    # Collect folders from all movie drives
+    all_folders = []
+    for lib_dir in config.MOVIE_DEST_DIRS:
+        library = Path(lib_dir)
+        if not library.exists():
+            log.warning(f"Skipping missing library: {library}")
+            continue
+        log.info(f"Scanning library: {library}")
+        all_folders.extend(sorted(f for f in library.iterdir() if f.is_dir()))
+
+    if not all_folders:
+        log.error("No movie library directories found")
+        return 0, 0, 0
 
     progress = load_library_progress()
     prev_done = progress["movies"]
@@ -1073,7 +1117,7 @@ def process_library(dry_run: bool = False) -> tuple[int, int, int]:
     already_ok = 0
     prev_skipped = 0
 
-    folders = sorted([f for f in library.iterdir() if f.is_dir()])
+    folders = all_folders
     total = len(folders)
 
     try:
@@ -1258,14 +1302,22 @@ def rename_tv_files_in_season(
 
 def process_tv_library(dry_run: bool = False) -> tuple[int, int, int]:
     """Process existing TV library to rename folders and episode files."""
-    library = Path(config.TV_DEST_DIR)
-    if not library.exists():
-        log.error(f"TV library directory does not exist: {library}")
-        return 0, 0, 0
-
-    log.info(f"Scanning TV library: {library}")
     if dry_run:
         log.info("=== DRY RUN MODE - No files will be renamed ===")
+
+    # Collect folders from all TV drives
+    all_folders = []
+    for lib_dir in config.TV_DEST_DIRS:
+        library = Path(lib_dir)
+        if not library.exists():
+            log.warning(f"Skipping missing TV library: {library}")
+            continue
+        log.info(f"Scanning TV library: {library}")
+        all_folders.extend(sorted(f for f in library.iterdir() if f.is_dir()))
+
+    if not all_folders:
+        log.error("No TV library directories found")
+        return 0, 0, 0
 
     progress = load_library_progress()
     prev_done = progress["tv"]
@@ -1275,7 +1327,7 @@ def process_tv_library(dry_run: bool = False) -> tuple[int, int, int]:
     already_ok = 0
     prev_skipped = 0
 
-    folders = sorted([f for f in library.iterdir() if f.is_dir()])
+    folders = all_folders
     total = len(folders)
 
     try:
@@ -1589,19 +1641,13 @@ def main() -> None:
         log.error("Cannot combine --watch and --library/--library-tv")
         return
 
-    # Library mode - process existing movie library
+    # Library mode - process existing movie library (scans all drives internally)
     if args.library:
-        if not Path(config.MOVIE_DEST_DIR).exists():
-            log.error(f"Movie library directory does not exist: {config.MOVIE_DEST_DIR}")
-            return
         process_library(dry_run=args.dry_run)
         return
 
-    # TV Library mode - process existing TV library
+    # TV Library mode - process existing TV library (scans all drives internally)
     if args.library_tv:
-        if not Path(config.TV_DEST_DIR).exists():
-            log.error(f"TV library directory does not exist: {config.TV_DEST_DIR}")
-            return
         process_tv_library(dry_run=args.dry_run)
         return
 
@@ -1610,6 +1656,7 @@ def main() -> None:
         log.error(f"Source directory does not exist: {config.SOURCE_DIR}")
         return
 
+    # Create primary destination dirs if needed
     if not Path(config.MOVIE_DEST_DIR).exists():
         log.info(f"Creating movie destination directory: {config.MOVIE_DEST_DIR}")
         Path(config.MOVIE_DEST_DIR).mkdir(parents=True, exist_ok=True)
@@ -1617,6 +1664,14 @@ def main() -> None:
     if not Path(config.TV_DEST_DIR).exists():
         log.info(f"Creating TV destination directory: {config.TV_DEST_DIR}")
         Path(config.TV_DEST_DIR).mkdir(parents=True, exist_ok=True)
+
+    # Log which additional drives are available
+    for drive_dir in config.MOVIE_DEST_DIRS:
+        if drive_dir != config.MOVIE_DEST_DIR and Path(drive_dir).exists():
+            log.info(f"Additional movie drive available: {drive_dir}")
+    for drive_dir in config.TV_DEST_DIRS:
+        if drive_dir != config.TV_DEST_DIR and Path(drive_dir).exists():
+            log.info(f"Additional TV drive available: {drive_dir}")
 
     if args.watch:
         run_watch()
