@@ -547,6 +547,12 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
     season = tv_info["season"]
     episode = tv_info["episode"]
 
+    # PTN returns lists for multi-season/episode packs
+    if isinstance(season, list):
+        season = season[0]
+    if isinstance(episode, list):
+        episode = episode[0]
+
     # Try to get episode title from OMDb (only if we have an episode number)
     episode_title = tv_info.get("episode_title")
     if not episode_title and episode:
@@ -574,40 +580,57 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
         elif show["type"] == "folder":
             files_found = 0
             for video_file in show["video_files"]:
-                # Re-parse each file for correct episode number
+                # Re-parse each file for correct season and episode number
                 file_tv_info = parse_tv_info(video_file.stem) or {}
+                file_season = file_tv_info.get("season") or season
                 file_episode = file_tv_info.get("episode") or episode
+                if isinstance(file_season, list):
+                    file_season = file_season[0]
+                if isinstance(file_episode, list):
+                    file_episode = file_episode[0]
+
+                # Build per-file destination folder based on file's season
+                file_season_folder = f"Season {file_season:02d}"
+                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
                 file_ep_title = file_tv_info.get("episode_title") or episode_title
                 if not file_ep_title and file_episode:
-                    ep_info = query_omdb_episode(series_title, season, file_episode)
+                    ep_info = query_omdb_episode(series_title, file_season, file_episode)
                     if ep_info:
                         file_ep_title = ep_info.get("episode_title")
                         time.sleep(0.15)
 
                 dest_name = create_tv_filename(
-                    series_title, season, file_episode, file_ep_title, video_file.suffix.lower()
+                    series_title, file_season, file_episode, file_ep_title, video_file.suffix.lower()
                 )
                 if dest_name is None:
                     log.info(f"  SKIP: No episode number in: {video_file.name}")
                     continue
                 files_found += 1
-                dest_file = dest_folder / dest_name
+                dest_file = file_dest_folder / dest_name
                 log.info(f"[DRY RUN] Would move: {video_file.name} -> {dest_file}")
 
             for sub_file in show.get("subtitle_files", []):
                 stem, suffix = get_file_parts(sub_file)
                 lang_suffix = extract_language_suffix(stem)
                 file_tv_info = parse_tv_info(stem) or {}
+                file_season = file_tv_info.get("season") or season
                 file_episode = file_tv_info.get("episode") or episode
+                if isinstance(file_season, list):
+                    file_season = file_season[0]
+                if isinstance(file_episode, list):
+                    file_episode = file_episode[0]
+
+                file_season_folder = f"Season {file_season:02d}"
+                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
 
                 dest_name = create_tv_filename(
-                    series_title, season, file_episode, None, suffix, lang_suffix
+                    series_title, file_season, file_episode, None, suffix, lang_suffix
                 )
                 if dest_name is None:
                     continue  # Skip subtitles without episode numbers
-                dest_file = dest_folder / dest_name
+                dest_file = file_dest_folder / dest_name
                 log.info(f"[DRY RUN] Would move: {sub_file.name} -> {dest_file}")
 
             if files_found == 0:
@@ -639,24 +662,33 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
             files_moved = 0
             for video_file in show["video_files"]:
                 file_tv_info = parse_tv_info(video_file.stem) or {}
+                file_season = file_tv_info.get("season") or season
                 file_episode = file_tv_info.get("episode") or episode
+                if isinstance(file_season, list):
+                    file_season = file_season[0]
+                if isinstance(file_episode, list):
+                    file_episode = file_episode[0]
+
+                # Build per-file destination folder based on file's season
+                file_season_folder = f"Season {file_season:02d}"
+                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
                 file_ep_title = file_tv_info.get("episode_title") or episode_title
                 if not file_ep_title and file_episode:
-                    ep_info = query_omdb_episode(series_title, season, file_episode)
+                    ep_info = query_omdb_episode(series_title, file_season, file_episode)
                     if ep_info:
                         file_ep_title = ep_info.get("episode_title")
                         time.sleep(0.15)
 
                 dest_name = create_tv_filename(
-                    series_title, season, file_episode, file_ep_title, video_file.suffix.lower()
+                    series_title, file_season, file_episode, file_ep_title, video_file.suffix.lower()
                 )
                 if dest_name is None:
                     log.info(f"  SKIP: No episode number in: {video_file.name}")
                     continue
-                dest_folder.mkdir(parents=True, exist_ok=True)
-                dest_file = dest_folder / dest_name
+                file_dest_folder.mkdir(parents=True, exist_ok=True)
+                dest_file = file_dest_folder / dest_name
                 if dest_file.exists():
                     log.warning(f"  SKIP: Destination already exists: {dest_file.name}")
                     continue
@@ -668,14 +700,23 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                 stem, suffix = get_file_parts(sub_file)
                 lang_suffix = extract_language_suffix(stem)
                 file_tv_info = parse_tv_info(stem) or {}
+                file_season = file_tv_info.get("season") or season
                 file_episode = file_tv_info.get("episode") or episode
+                if isinstance(file_season, list):
+                    file_season = file_season[0]
+                if isinstance(file_episode, list):
+                    file_episode = file_episode[0]
+
+                file_season_folder = f"Season {file_season:02d}"
+                file_dest_folder = Path(config.TV_DEST_DIR) / series_folder_name / file_season_folder
 
                 dest_name = create_tv_filename(
-                    series_title, season, file_episode, None, suffix, lang_suffix
+                    series_title, file_season, file_episode, None, suffix, lang_suffix
                 )
                 if dest_name is None:
                     continue  # Skip subtitles without episode numbers
-                dest_file = dest_folder / dest_name
+                file_dest_folder.mkdir(parents=True, exist_ok=True)
+                dest_file = file_dest_folder / dest_name
                 if dest_file.exists():
                     continue  # Skip silently for subs
                 shutil.move(str(sub_file), str(dest_file))
@@ -1148,6 +1189,10 @@ def rename_tv_files_in_season(
         # Without season folders, use each file's own parsed season
         file_season = season if trust_folder_season else (tv_info.get("season") or season)
         file_episode = tv_info["episode"]
+        if isinstance(file_season, list):
+            file_season = file_season[0]
+        if isinstance(file_episode, list):
+            file_episode = file_episode[0]
 
         # Extract existing episode title from filename if it's already in our format
         # "Show Name - S01E02 - Episode Title.ext" -> "Episode Title"
@@ -1188,6 +1233,10 @@ def rename_tv_files_in_season(
 
         file_season = season if trust_folder_season else (tv_info.get("season") or season)
         file_episode = tv_info["episode"]
+        if isinstance(file_season, list):
+            file_season = file_season[0]
+        if isinstance(file_episode, list):
+            file_episode = file_episode[0]
         lang_suffix = extract_language_suffix(stem)
 
         new_name = create_tv_filename(
@@ -1402,6 +1451,13 @@ def process_tv_shows_list(tv_shows: list[dict], quiet: bool = False, dry_run: bo
 
         season = tv_info.get("season", 1)
         episode = tv_info.get("episode")
+
+        # PTN returns lists for multi-season/episode packs (e.g. "Season 1-12")
+        if isinstance(season, list):
+            season = season[0]
+        if isinstance(episode, list):
+            episode = episode[0]
+
         ep_str = f"{episode:02d}" if episode else "??"
         log.info(f"  Parsed: title='{title}', S{season:02d}E{ep_str}")
 
