@@ -629,7 +629,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                 file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
-                file_ep_title = file_tv_info.get("episode_title") or episode_title
+                file_ep_title = file_tv_info.get("episode_title")
                 if not file_ep_title and file_episode:
                     ep_info = query_omdb_episode(series_title, file_season, file_episode)
                     if ep_info:
@@ -709,7 +709,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                 file_dest_folder = tv_base / series_folder_name / file_season_folder
 
                 # Query OMDb for episode title if we have an episode number
-                file_ep_title = file_tv_info.get("episode_title") or episode_title
+                file_ep_title = file_tv_info.get("episode_title")
                 if not file_ep_title and file_episode:
                     ep_info = query_omdb_episode(series_title, file_season, file_episode)
                     if ep_info:
