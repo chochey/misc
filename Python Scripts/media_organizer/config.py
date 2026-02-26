@@ -1,22 +1,20 @@
 # Media Renamer Configuration
 
-# Directories
-SOURCE_DIR = r"/media/blue/ST6000NM 0115-1YZ110 USB Device/Share"
-INCOMPLETE_DIR = r"/media/blue/ST6000NM 0115-1YZ110 USB Device/Share/incomplete"
+# Directories (using mergerfs merged mount at /mnt/media)
+SOURCE_DIR = r"/mnt/media/Share"
+INCOMPLETE_DIR = r"/mnt/media/incomplete"
 
 # Primary destination (default for new content with no existing folder)
-MOVIE_DEST_DIR = r"/media/blue/OOS6000G USB Device/Movies"
-TV_DEST_DIR = r"/media/blue/OOS6000G USB Device/TV"
+MOVIE_DEST_DIR = r"/mnt/media/Movies"
+TV_DEST_DIR = r"/mnt/media/TV"
 
 # All destination drives (searched for existing content, used by --library/--library-tv)
-# To add a new drive, just append another path to each list
+# With mergerfs, all drives are combined so only one path is needed per type
 MOVIE_DEST_DIRS = [
-    r"/media/blue/OOS6000G USB Device/Movies",
-    r"/media/blue/New Volume/Movies",
+    r"/mnt/media/Movies",
 ]
 TV_DEST_DIRS = [
-    r"/media/blue/OOS6000G USB Device/TV",
-    r"/media/blue/New Volume/TV",
+    r"/mnt/media/TV",
 ]
 
 # OMDb API

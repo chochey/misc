@@ -215,22 +215,25 @@ def is_good_match(parsed_title: str, parsed_year: str | None, omdb_info: dict) -
 
     # Check for suspiciously long titles that might indicate a TV special
     # e.g., "Movie Name: Late Night with Host featuring Guest Stars"
-    suspicious_patterns = [
-        r"guest\s*star",
-        r"late\s*(night|show)",
-        r"talk\s*show",
-        r"interview",
-        r"behind\s*the\s*scenes",
-        r"making\s*of",
-        r"special\s*appearance",
-        r"featuring",
-        r"hosted\s*by",
-        r"with\s+(jimmy|stephen|seth|jimmy|james|conan|trevor|john)",
-    ]
-    for pattern in suspicious_patterns:
-        if re.search(pattern, omdb_title, re.IGNORECASE):
-            log.info(f"  Rejected: suspicious title pattern in '{omdb_title}' (likely TV special)")
-            return False
+    # Only apply if the OMDb title differs significantly from what we searched for
+    # (skip if titles match closely - e.g., "The Interview" is a real movie)
+    if title_similarity < 0.85:
+        suspicious_patterns = [
+            r"guest\s*star",
+            r"late\s*(night|show)",
+            r"talk\s*show",
+            r"interview",
+            r"behind\s*the\s*scenes",
+            r"making\s*of",
+            r"special\s*appearance",
+            r"featuring",
+            r"hosted\s*by",
+            r"with\s+(jimmy|stephen|seth|jimmy|james|conan|trevor|john)",
+        ]
+        for pattern in suspicious_patterns:
+            if re.search(pattern, omdb_title, re.IGNORECASE):
+                log.info(f"  Rejected: suspicious title pattern in '{omdb_title}' (likely TV special)")
+                return False
 
     log.info(f"  Match accepted: similarity={title_similarity:.2f}, year_ok={year_ok}")
     return True
@@ -313,6 +316,7 @@ def query_omdb(title: str, year: str | None = None) -> dict | None:
     cache_key = (title.lower().strip(), year)
     cached_time = _omdb_no_match_cache.get(cache_key)
     if cached_time and (time.time() - cached_time) < _OMDB_CACHE_TTL:
+        log.debug(f"  No OMDb match for movie (cached): {title} ({year})")
         return None
 
     variations = get_title_variations(title)
@@ -380,7 +384,7 @@ def is_still_transferring(name: str) -> bool:
 
 def is_tv_show(parsed: dict) -> bool:
     """Check if parsed filename indicates a TV show (has season/episode info)."""
-    return bool(parsed.get("season") or parsed.get("episode"))
+    return parsed.get("season") is not None or parsed.get("episode") is not None
 
 
 def parse_tv_info(filename: str) -> dict | None:
@@ -396,23 +400,86 @@ def parse_tv_info(filename: str) -> dict | None:
 
     return {
         "title": parsed.get("title"),
-        "season": parsed.get("season", 1),
+        "season": parsed.get("season") if parsed.get("season") is not None else 1,
         "episode": episode,
         "episode_title": parsed.get("episodeName"),
     }
 
 
-def query_omdb_series(title: str, year: str | None = None) -> dict | None:
-    """Query OMDb API for a TV series.
+def get_series_title_variations(title: str) -> list[str]:
+    """Generate variations of a TV series title for OMDb lookup.
+
+    Handles common patterns like country suffixes (US, UK), missing apostrophes,
+    and other naming quirks in folder names.
+    """
+    title = clean_title(title).strip()
+    variations = [title]
+
+    # Strip country suffixes: "Hells Kitchen US" -> "Hells Kitchen", "Top Gear UK" -> "Top Gear"
+    country_stripped = re.sub(r"\s+(US|UK|AU|CA|NZ)$", "", title, flags=re.IGNORECASE).strip()
+    if country_stripped and country_stripped != title and country_stripped not in variations:
+        variations.append(country_stripped)
+
+    # Add common contraction variants: "Dont" -> "Don't", "Whats" -> "What's"
+    contraction_map = {
+        r"\bDont\b": "Don't",
+        r"\bWont\b": "Won't",
+        r"\bCant\b": "Can't",
+        r"\bIsnt\b": "Isn't",
+        r"\bDidnt\b": "Didn't",
+        r"\bDoesnt\b": "Doesn't",
+        r"\bHasnt\b": "Hasn't",
+        r"\bHavent\b": "Haven't",
+        r"\bWasnt\b": "Wasn't",
+        r"\bWerent\b": "Weren't",
+        r"\bArent\b": "Aren't",
+        r"\bCouldnt\b": "Couldn't",
+        r"\bShouldnt\b": "Shouldn't",
+        r"\bWouldnt\b": "Wouldn't",
+        r"\bWhats\b": "What's",
+        r"\bThats\b": "That's",
+        r"\bIts\b": "It's",
+        r"\bWhos\b": "Who's",
+        r"\bHeres\b": "Here's",
+        r"\bTheres\b": "There's",
+        r"\bWheres\b": "Where's",
+    }
+    for base_var in variations.copy():
+        for pattern, replacement in contraction_map.items():
+            fixed = re.sub(pattern, replacement, base_var, flags=re.IGNORECASE)
+            if fixed != base_var and fixed not in variations:
+                variations.append(fixed)
+
+    # Generic possessive/apostrophe-s: try each capitalized word ending in 's'
+    # individually, e.g. "Bobs Burgers" -> "Bob's Burgers" and "Bobs Burger's"
+    for base_var in variations.copy():
+        # Find all capitalized words ending in 's' (potential possessives)
+        words_with_s = re.findall(r"\b([A-Z][a-z]+)s\b", base_var)
+        for word in words_with_s:
+            # Replace just this one word's trailing s with 's
+            possessive = re.sub(r"\b" + re.escape(word) + r"s\b", word + "'s", base_var, count=1)
+            if possessive != base_var and possessive not in variations:
+                variations.append(possessive)
+
+    # Try "and" <-> "&" swap
+    for var in variations.copy():
+        if " and " in var.lower():
+            swapped = re.sub(r"\band\b", "&", var, flags=re.IGNORECASE)
+            if swapped not in variations:
+                variations.append(swapped)
+        if " & " in var:
+            swapped = var.replace(" & ", " and ")
+            if swapped not in variations:
+                variations.append(swapped)
+
+    return variations
+
+
+def _query_omdb_series_single(title: str, year: str | None = None) -> dict | None:
+    """Query OMDb API for a single TV series title (no variations).
 
     Raises OMDbRateLimitError if too many consecutive 401 errors are detected.
-    Results are cached to avoid re-querying the same titles in watch mode.
     """
-    cache_key = (f"series:{title.lower().strip()}", year)
-    cached_time = _omdb_no_match_cache.get(cache_key)
-    if cached_time and (time.time() - cached_time) < _OMDB_CACHE_TTL:
-        return None
-
     params = {
         "apikey": config.OMDB_API_KEY,
         "t": title,
@@ -437,6 +504,30 @@ def query_omdb_series(title: str, year: str | None = None) -> dict | None:
         raise  # Let this propagate up
     except requests.RequestException as e:
         log.error(f"OMDb API error: {e}")
+
+    return None
+
+
+def query_omdb_series(title: str, year: str | None = None) -> dict | None:
+    """Query OMDb API for a TV series, trying title variations.
+
+    Raises OMDbRateLimitError if too many consecutive 401 errors are detected.
+    Results are cached to avoid re-querying the same titles in watch mode.
+    """
+    cache_key = (f"series:{title.lower().strip()}", year)
+    cached_time = _omdb_no_match_cache.get(cache_key)
+    if cached_time and (time.time() - cached_time) < _OMDB_CACHE_TTL:
+        log.debug(f"  No OMDb match for series (cached): {title}")
+        return None
+
+    variations = get_series_title_variations(title)
+
+    for variant in variations:
+        result = _query_omdb_series_single(variant, year)
+        if result:
+            if variant != variations[0]:
+                log.info(f"  Series matched via variation: '{variant}'")
+            return result
 
     _omdb_no_match_cache[cache_key] = time.time()
     return None
@@ -617,7 +708,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
             for video_file in show["video_files"]:
                 # Re-parse each file for correct season and episode number
                 file_tv_info = parse_tv_info(video_file.stem) or {}
-                file_season = file_tv_info.get("season") or season
+                file_season = file_tv_info.get("season") if file_tv_info.get("season") is not None else season
                 file_episode = file_tv_info.get("episode") or episode
                 if isinstance(file_season, list):
                     file_season = file_season[0]
@@ -650,7 +741,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                 stem, suffix = get_file_parts(sub_file)
                 lang_suffix = extract_language_suffix(stem)
                 file_tv_info = parse_tv_info(stem) or {}
-                file_season = file_tv_info.get("season") or season
+                file_season = file_tv_info.get("season") if file_tv_info.get("season") is not None else season
                 file_episode = file_tv_info.get("episode") or episode
                 if isinstance(file_season, list):
                     file_season = file_season[0]
@@ -697,7 +788,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
             files_moved = 0
             for video_file in show["video_files"]:
                 file_tv_info = parse_tv_info(video_file.stem) or {}
-                file_season = file_tv_info.get("season") or season
+                file_season = file_tv_info.get("season") if file_tv_info.get("season") is not None else season
                 file_episode = file_tv_info.get("episode") or episode
                 if isinstance(file_season, list):
                     file_season = file_season[0]
@@ -735,7 +826,7 @@ def move_tv_show(show: dict, series_info: dict, dry_run: bool = False) -> bool:
                 stem, suffix = get_file_parts(sub_file)
                 lang_suffix = extract_language_suffix(stem)
                 file_tv_info = parse_tv_info(stem) or {}
-                file_season = file_tv_info.get("season") or season
+                file_season = file_tv_info.get("season") if file_tv_info.get("season") is not None else season
                 file_episode = file_tv_info.get("episode") or episode
                 if isinstance(file_season, list):
                     file_season = file_season[0]
@@ -1231,7 +1322,7 @@ def rename_tv_files_in_season(
 
         # In a matched season folder, trust the folder's season number (filenames may be wrong)
         # Without season folders, use each file's own parsed season
-        file_season = season if trust_folder_season else (tv_info.get("season") or season)
+        file_season = season if trust_folder_season else (tv_info.get("season") if tv_info.get("season") is not None else season)
         file_episode = tv_info["episode"]
         if isinstance(file_season, list):
             file_season = file_season[0]
@@ -1275,7 +1366,7 @@ def rename_tv_files_in_season(
         if not tv_info or not tv_info.get("episode"):
             continue
 
-        file_season = season if trust_folder_season else (tv_info.get("season") or season)
+        file_season = season if trust_folder_season else (tv_info.get("season") if tv_info.get("season") is not None else season)
         file_episode = tv_info["episode"]
         if isinstance(file_season, list):
             file_season = file_season[0]
@@ -1340,10 +1431,26 @@ def process_tv_library(dry_run: bool = False) -> tuple[int, int, int]:
             log.info(f"[{i}/{total}] Checking: {folder.name}")
 
             # Check if folder already has year in "Show Name (Year)" format
-            match = re.match(r"^(.+)\s+\((\d{4})\)$", folder.name)
+            # Also handle malformed like "Fargo (2014 )" with extra whitespace
+            match = re.match(r"^(.+)\s+\(\s*(\d{4})\s*\)$", folder.name)
             if match:
-                series_title = match.group(1)
+                series_title = match.group(1).strip()
                 series_year = match.group(2)
+
+                # If the folder name was malformed, fix it
+                clean_folder_name = f"{re.sub(r'[<>:\"/\\|?*]', '', series_title)} ({series_year})"
+                if folder.name != clean_folder_name:
+                    clean_folder = folder.parent / clean_folder_name
+                    if clean_folder.exists() and clean_folder != folder:
+                        log.warning(f"  SKIP: Clean target already exists: {clean_folder_name}")
+                        skipped += 1
+                        continue
+                    if dry_run:
+                        log.info(f"  [DRY RUN] Would fix folder name: {folder.name} -> {clean_folder_name}")
+                    else:
+                        folder.rename(clean_folder)
+                        log.info(f"  Fixed folder name: {folder.name} -> {clean_folder_name}")
+                        folder = clean_folder
             else:
                 # Need to look up the show on OMDb to get the year
                 parsed_title = folder.name
@@ -1501,7 +1608,7 @@ def process_tv_shows_list(tv_shows: list[dict], quiet: bool = False, dry_run: bo
             skipped += 1
             continue
 
-        season = tv_info.get("season", 1)
+        season = tv_info.get("season") if tv_info.get("season") is not None else 1
         episode = tv_info.get("episode")
 
         # PTN returns lists for multi-season/episode packs (e.g. "Season 1-12")
@@ -1622,6 +1729,11 @@ def main() -> None:
         help="Scan and rename existing TV show library folders and episodes",
     )
     parser.add_argument(
+        "--all", "-a",
+        action="store_true",
+        help="Scan and rename both movie and TV libraries at once",
+    )
+    parser.add_argument(
         "--library-reset",
         choices=["movies", "tv", "all"],
         help="Clear library progress tracking so folders are re-processed from scratch",
@@ -1637,18 +1749,16 @@ def main() -> None:
         log.error("Cannot combine --watch and --dry-run")
         return
 
-    if args.watch and (args.library or args.library_tv):
-        log.error("Cannot combine --watch and --library/--library-tv")
+    if args.watch and (args.library or args.library_tv or args.all):
+        log.error("Cannot combine --watch and --library/--library-tv/--all")
         return
 
-    # Library mode - process existing movie library (scans all drives internally)
-    if args.library:
-        process_library(dry_run=args.dry_run)
-        return
-
-    # TV Library mode - process existing TV library (scans all drives internally)
-    if args.library_tv:
-        process_tv_library(dry_run=args.dry_run)
+    # Library mode - process existing libraries (can run both together)
+    if args.all or args.library or args.library_tv:
+        if args.all or args.library:
+            process_library(dry_run=args.dry_run)
+        if args.all or args.library_tv:
+            process_tv_library(dry_run=args.dry_run)
         return
 
     # Normal mode - verify directories exist
